@@ -45,6 +45,7 @@ COPY . /app
 
 WORKDIR /app
 
+ARG SETUPTOOLS_SCM_PRETEND_VERSION
 RUN pip3 install --no-cache-dir .[test,webservice,watcher]
 
 FROM base
