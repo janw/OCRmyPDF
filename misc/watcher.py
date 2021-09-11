@@ -83,13 +83,17 @@ def wait_for_file_ready(file_path):
         try:
             pdf = pikepdf.open(file_path)
         except (FileNotFoundError, pikepdf.PdfError) as e:
-            log.info(f"File {file_path} is not ready yet")
-            log.debug("Exception was", exc_info=e)
 
-            wait_for = min(
+            wait_for = round(min(
                 POLL_NEW_FILE_BACKOFF_BASE**trial,
                 POLL_NEW_FILE_BACKOFF_MAX
+            ))
+
+            log.info(
+                "File %s is not ready yet, waiting for %d seconds", file_path, wait_for
             )
+            log.debug("Exception was", exc_info=e)
+
             time.sleep(wait_for)
             trial += 1
             if wait_for >= POLL_NEW_FILE_BACKOFF_MAX:
