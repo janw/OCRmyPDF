@@ -48,7 +48,8 @@ OUTPUT_DIRECTORY_YEAR_MONTH = getenv_bool('OCR_OUTPUT_DIRECTORY_YEAR_MONTH')
 ON_SUCCESS_DELETE = getenv_bool('OCR_ON_SUCCESS_DELETE')
 DESKEW = getenv_bool('OCR_DESKEW')
 OCR_JSON_SETTINGS = json.loads(os.getenv('OCR_JSON_SETTINGS', '{}'))
-POLL_NEW_FILE_SECONDS = int(os.getenv('OCR_POLL_NEW_FILE_SECONDS', '1'))
+POLL_NEW_FILE_BACKOFF_BASE = float(os.getenv('OCR_POLL_NEW_FILE_BACKOFF_BASE', '1.5'))
+POLL_NEW_FILE_BACKOFF_MAX = int(os.getenv('OCR_POLL_NEW_FILE_BACKOFF_MAX', '60'))
 USE_POLLING = getenv_bool('OCR_USE_POLLING')
 LOGLEVEL = os.getenv('OCR_LOGLEVEL', 'INFO')
 PATTERNS = ['*.pdf', '*.PDF']
@@ -76,15 +77,23 @@ def wait_for_file_ready(file_path):
     # watchdog event before the file is actually fully on disk, causing
     # pikepdf to fail.
 
-    retries = 5
-    while retries:
+    trial = 0
+    max_backoff_retries = 3
+    while max_backoff_retries:
         try:
             pdf = pikepdf.open(file_path)
         except (FileNotFoundError, pikepdf.PdfError) as e:
             log.info(f"File {file_path} is not ready yet")
             log.debug("Exception was", exc_info=e)
-            time.sleep(POLL_NEW_FILE_SECONDS)
-            retries -= 1
+
+            wait_for = min(
+                POLL_NEW_FILE_BACKOFF_BASE**trial,
+                POLL_NEW_FILE_BACKOFF_MAX
+            )
+            time.sleep(wait_for)
+            trial += 1
+            if wait_for >= POLL_NEW_FILE_BACKOFF_MAX:
+                max_backoff_retries -= 1
         else:
             pdf.close()
             return True
@@ -144,7 +153,8 @@ def main():
         f"ON_SUCCESS_DELETE: {ON_SUCCESS_DELETE}\n"
         f"DESKEW: {DESKEW}\n"
         f"ARGS: {OCR_JSON_SETTINGS}\n"
-        f"POLL_NEW_FILE_SECONDS: {POLL_NEW_FILE_SECONDS}\n"
+        f"POLL_NEW_FILE_BACKOFF_BASE: {POLL_NEW_FILE_BACKOFF_BASE}\n"
+        f"POLL_NEW_FILE_BACKOFF_MAX: {POLL_NEW_FILE_BACKOFF_MAX}\n"
         f"USE_POLLING: {USE_POLLING}\n"
         f"LOGLEVEL: {LOGLEVEL}"
     )
